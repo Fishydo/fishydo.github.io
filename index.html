@@ -3,129 +3,246 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hand Tracking in Browser</title>
+    <title>Hand Tracking in Browser (Safari Compatible)</title>
+    <!-- Tailwind CSS for basic styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #1a202c;
-            color: #e2e8f0;
+            background-color: #1a202c; /* Dark background */
+            color: #e2e8f0; /* Light text */
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
             margin: 0;
-            overflow: hidden;
+            overflow: hidden; /* Prevent scrollbars */
         }
         .container {
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 1rem;
-            padding: 1rem;
+            padding: 1.5rem;
             max-width: 90%;
-            background-color: #2d3748;
-            border-radius: 0.75rem;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            background-color: #2d3748; /* Slightly lighter dark background */
+            border-radius: 0.75rem; /* Rounded corners */
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease-in-out;
         }
         .video-canvas-container {
             position: relative;
             width: 100%;
-            max-width: 640px;
+            max-width: 640px; /* Standard video width */
             border-radius: 0.5rem;
             overflow: hidden;
-            background-color: black;
+            background-color: black; /* Background for when video isn't loaded */
         }
         video, canvas {
             display: block;
             width: 100%;
             height: auto;
+            /* Flip horizontally for a mirror effect, common for webcam views */
             transform: scaleX(-1);
+            object-fit: cover; /* Ensures video fills container without stretching */
         }
         canvas {
             position: absolute;
             top: 0;
             left: 0;
-            z-index: 1;
+            z-index: 1; /* Ensure canvas draws over the video */
+        }
+        .status-message, .error-message {
+            margin-top: 0.75rem;
+            font-size: 0.95rem; /* text-base */
+            text-align: center;
         }
         .status-message {
-            margin-top: 0.5rem;
-            font-size: 0.875rem;
-            color: #cbd5e0;
+            color: #cbd5e0; /* text-gray-300 */
+        }
+        .error-message {
+            color: #ef4444; /* text-red-500 */
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1 class="text-3xl font-bold mb-4 text-blue-400">👋 Hand Tracking</h1>
+        <h1 class="text-3xl md:text-4xl font-extrabold mb-4 text-blue-400">👋 Hand Tracking</h1>
+        <p class="status-message" id="instructionMessage">Ensure camera access is granted. Move your hand clearly into the camera frame.</p>
         <div class="video-canvas-container">
-            <video id="videoElement" autoplay playsinline></video>
+            <!-- Video element to display the camera feed -->
+            <!-- autoplay and playsinline are crucial for iOS Safari -->
+            <video id="videoElement" autoplay playsinline muted></video>
+            <!-- Canvas element to draw the hand landmarks -->
             <canvas id="canvasElement"></canvas>
         </div>
-        <p id="loadingMessage" class="status-message">Loading hand tracking model...</p>
+        <p id="loadingMessage" class="status-message">Initializing...</p>
+        <p id="errorMessage" class="error-message hidden"></p>
     </div>
+
+    <!-- MediaPipe Hands and Drawing Utilities from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1675469240/drawing_utils.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675469240/camera_utils.min.js"></script>
+
     <script type="module">
+        // Get references to the HTML elements
         const videoElement = document.getElementById('videoElement');
         const canvasElement = document.getElementById('canvasElement');
         const canvasCtx = canvasElement.getContext('2d');
         const loadingMessage = document.getElementById('loadingMessage');
-        let camera = null;
+        const errorMessage = document.getElementById('errorMessage');
 
-        const hands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`
-        });
+        let camera = null; // To manage the camera utility
+        let hands = null; // MediaPipe Hands instance
 
-        hands.setOptions({
-            maxNumHands: 2,
-            minDetectionConfidence: 0.7,
-            minTrackingConfidence: 0.7
-        });
+        // Helper function to display messages
+        function showMessage(type, message) {
+            if (type === 'loading') {
+                loadingMessage.textContent = message;
+                loadingMessage.classList.remove('hidden');
+                errorMessage.classList.add('hidden'); // Hide any previous errors
+            } else if (type === 'error') {
+                errorMessage.textContent = 'Error: ' + message;
+                errorMessage.classList.remove('hidden');
+                loadingMessage.classList.add('hidden'); // Hide loading message
+            } else if (type === 'clearError') {
+                errorMessage.classList.add('hidden');
+            }
+        }
 
-        hands.onResults((results) => {
+        // Function to initialize MediaPipe Hands model
+        async function initializeHandsModel() {
+            try {
+                showMessage('loading', 'Loading hand tracking model...');
+                hands = new Hands({
+                    locateFile: (file) => {
+                        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`;
+                    }
+                });
+
+                hands.setOptions({
+                    maxNumHands: 2, // Detect up to 2 hands
+                    minDetectionConfidence: 0.6, // Lowered slightly for potentially easier detection
+                    minTrackingConfidence: 0.6  // Lowered slightly for potentially easier tracking
+                });
+
+                hands.onResults(onResults); // Set the results callback
+                await hands.initialize();
+                showMessage('loading', 'Hand tracking model loaded successfully!');
+                return true;
+            } catch (error) {
+                showMessage('error', `Failed to load MediaPipe model: ${error.message}. Check network and console.`);
+                console.error('MediaPipe Model Loading Error:', error);
+                return false;
+            }
+        }
+
+        // Function to start the camera feed
+        async function startCamera() {
+            try {
+                showMessage('loading', 'Requesting camera access...');
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                videoElement.srcObject = stream;
+
+                // Wait for the video to be ready for playback
+                await new Promise((resolve) => {
+                    videoElement.onloadedmetadata = () => {
+                        // Ensure video is playing before trying to use it with MediaPipe
+                        videoElement.play().then(() => {
+                            resolve();
+                        }).catch(playError => {
+                            showMessage('error', `Video playback failed: ${playError.message}.`);
+                            console.error('Video Playback Error:', playError);
+                        });
+                    };
+                });
+
+                // Set canvas dimensions to match video dimensions
+                canvasElement.width = videoElement.videoWidth;
+                canvasElement.height = videoElement.videoHeight;
+                showMessage('loading', 'Camera feed started.');
+                return true;
+
+            } catch (error) {
+                showMessage('error', `Could not access camera: ${error.name || error.message}. Please check browser permissions.`);
+                console.error('Camera Access Error:', error);
+                return false;
+            }
+        }
+
+        // This function is called every time MediaPipe processes a frame and finds hands
+        function onResults(results) {
+            // Clear the canvas
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+
+            // Draw the video frame onto the canvas (flipped horizontally for mirror view)
+            canvasCtx.drawImage(
+                results.image, 0, 0, canvasElement.width, canvasElement.height
+            );
+
+            // If hands are detected, draw the landmarks and connections
+            if (results.multiHandLandmarks) {
                 for (const landmarks of results.multiHandLandmarks) {
-                    window.drawConnectors(canvasCtx, landmarks, window.HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
-                    window.drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', lineWidth: 2 });
+                    // Draw connections between hand landmarks (e.g., bones)
+                    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {
+                        color: '#00FF00', // Green color for connections
+                        lineWidth: 5
+                    });
+                    // Draw individual hand landmarks (e.g., finger joints, palm points)
+                    drawLandmarks(canvasCtx, landmarks, {
+                        color: '#FF0000', // Red color for landmarks
+                        lineWidth: 2
+                    });
+                }
+                // Once hands are detected, hide the loading message
+                showMessage('clearError'); // Clear any lingering errors too
+                loadingMessage.classList.add('hidden');
+            } else {
+                // If no hands are currently detected, remind the user
+                if (loadingMessage.classList.contains('hidden') && errorMessage.classList.contains('hidden')) {
+                     showMessage('loading', 'No hands detected. Try moving your hands closer and into good lighting.');
                 }
             }
             canvasCtx.restore();
-        });
-
-        async function initCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                videoElement.srcObject = stream;
-                videoElement.onloadeddata = () => {
-                    canvasElement.width = videoElement.videoWidth;
-                    canvasElement.height = videoElement.videoHeight;
-                    loadingMessage.textContent = 'Model loaded. Grant camera access if prompted.';
-                    startHandTracking();
-                };
-            } catch (error) {
-                console.error('Error accessing camera:', error);
-                loadingMessage.textContent = 'Error: Could not access camera. Please allow camera permissions.';
-            }
         }
 
-        function startHandTracking() {
-            camera = new window.Camera(videoElement, {
+        // Main initialization function
+        async function initApp() {
+            errorMessage.classList.add('hidden'); // Start with no error message visible
+
+            // 1. Initialize MediaPipe Hands Model
+            const modelLoaded = await initializeHandsModel();
+            if (!modelLoaded) {
+                return; // Stop if model fails to load
+            }
+
+            // 2. Start Camera Feed
+            const cameraStarted = await startCamera();
+            if (!cameraStarted) {
+                return; // Stop if camera fails to start
+            }
+
+            // 3. Start sending frames to MediaPipe
+            // Use Camera object from @mediapipe/camera_utils to simplify video handling
+            camera = new Camera(videoElement, {
                 onFrame: async () => {
+                    // Send current video frame to MediaPipe Hands for processing
                     await hands.send({ image: videoElement });
                 },
-                width: 640,
-                height: 480
+                width: videoElement.videoWidth,
+                height: videoElement.videoHeight
             });
-            camera.start();
-            loadingMessage.textContent = 'Hand tracking active!';
+
+            await camera.start();
+            showMessage('loading', 'Hand tracking active. Looking for hands...');
         }
 
-        window.onload = initCamera;
+        // Start the application when the window loads
+        window.onload = initApp;
+
     </script>
 </body>
 </html>
