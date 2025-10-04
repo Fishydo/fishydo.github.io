@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LCC Stream</title>
+<style>
+  @import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap");
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "Poppins", sans-serif;
+  }
+
+  body {
+    background: linear-gradient(120deg, #0b0e23, #12172f, #1b2345, #0b0e23);
+    background-size: 400% 400%;
+    animation: bgShift 20s ease infinite;
+    color: white;
+    overflow-x: hidden;
+  }
+
+  @keyframes bgShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  header {
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+
+  header h1 {
+    font-weight: 700;
+    background: linear-gradient(45deg, #00e0ff, #8f00ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: 1px;
+  }
+
+  .show-section {
+    padding: 2rem;
+  }
+
+  .show-row {
+    display: flex;
+    gap: 1rem;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    padding-bottom: 1rem;
+  }
+
+  .show-card {
+    min-width: 220px;
+    height: 320px;
+    border-radius: 14px;
+    overflow: hidden;
+    position: relative;
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    cursor: pointer;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  .show-card:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+  }
+
+  .show-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .show-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0));
+    display: flex;
+    align-items: flex-end;
+    padding: 1rem;
+  }
+
+  .show-overlay h3 {
+    font-weight: 600;
+    font-size: 1.1rem;
+  }
+
+  /* player modal */
+  #playerModal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(5, 10, 25, 0.8);
+    backdrop-filter: blur(20px);
+    z-index: 999;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+  }
+
+  #playerModal.active {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .playerCard {
+    width: min(1000px, 90%);
+    height: min(75vh, 700px);
+    background: linear-gradient(180deg, rgba(20,20,40,0.95), rgba(10,10,20,0.95));
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.7);
+    position: relative;
+  }
+
+  video {
+    width: 100%;
+    height: 100%;
+    background: black;
+    object-fit: cover;
+  }
+
+  .controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 0.8rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(to top, rgba(0,0,0,0.7), rgba(0,0,0,0));
+    transition: opacity 0.3s ease;
+  }
+
+  .controls button {
+    background: rgba(255,255,255,0.1);
+    border: none;
+    color: white;
+    font-size: 1.2rem;
+    padding: 0.4rem 0.8rem;
+    border-radius: 8px;
+    margin: 0 0.3rem;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .controls button:hover {
+    background: rgba(255,255,255,0.25);
+  }
+
+  .progress-bar {
+    flex: 1;
+    height: 4px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 2px;
+    margin: 0 1rem;
+    position: relative;
+    cursor: pointer;
+  }
+
+  .progress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #00e0ff, #8f00ff);
+    border-radius: 2px;
+  }
+
+  .nextEp {
+    position: absolute;
+    right: 1rem;
+    top: 1rem;
+    background: linear-gradient(90deg, #8f00ff, #00e0ff);
+    border: none;
+    padding: 0.5rem 1rem;
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: transform 0.2s ease;
+  }
+  .nextEp:hover {
+    transform: scale(1.05);
+  }
+
+</style>
+</head>
+<body>
+
+<header>
+  <h1>LCC Stream</h1>
+</header>
+
+<section class="show-section">
+  <h2>Murder Drones</h2>
+  <div class="show-row" id="murderDronesRow"></div>
+</section>
+
+<section class="show-section">
+  <h2>The Amazing Digital Circus</h2>
+  <div class="show-row" id="digitalCircusRow"></div>
+</section>
+
+<div id="playerModal">
+  <div class="playerCard">
+    <video id="videoPlayer" preload="metadata"></video>
+    <div class="controls">
+      <button id="backBtn">⟵</button>
+      <button id="playPause">▶</button>
+      <div class="progress-bar" id="progressBar"><div class="progress" id="progress"></div></div>
+      <button id="volBtn">🔊</button>
+      <button id="closeBtn">✖</button>
+    </div>
+    <button class="nextEp" id="nextEp">Next Episode ➤</button>
+  </div>
+</div>
+
+<script>
+  const murderDrones = [
+    "episodes/murderdrones1.mp4",
+    "episodes/murderdrones2.mp4",
+    "episodes/murderdrones3.mp4",
+    "episodes/murderdrones4.mp4",
+    "episodes/murderdrones5.mp4",
+    "episodes/murderdrones6.mp4",
+    "episodes/murderdrones7.mp4",
+    "episodes/murderdrones8.mp4",
+  ];
+  const digitalCircus = [
+    "episodes/digitalcircus1.mp4",
+    "episodes/digitalcircus2.mp4",
+    "episodes/digitalcircus3.mp4",
+    "episodes/digitalcircus4.mp4",
+    "episodes/digitalcircus5.mp4",
+    "episodes/digitalcircus6.mp4",
+  ];
+
+  const murderRow = document.getElementById("murderDronesRow");
+  const circusRow = document.getElementById("digitalCircusRow");
+  const playerModal = document.getElementById("playerModal");
+  const video = document.getElementById("videoPlayer");
+  const playPause = document.getElementById("playPause");
+  const closeBtn = document.getElementById("closeBtn");
+  const progress = document.getElementById("progress");
+  const progressBar = document.getElementById("progressBar");
+  const nextEp = document.getElementById("nextEp");
+
+  let currentShow = "";
+  let currentIndex = 0;
+
+  function createCards(showArray, container, name) {
+    showArray.forEach((ep, i) => {
+      const card = document.createElement("div");
+      card.className = "show-card";
+      card.innerHTML = `
+        <img src="thumbnails/${name}${i + 1}.jpg" alt="${name} Episode ${i + 1}">
+        <div class="show-overlay"><h3>${name} Ep ${i + 1}</h3></div>
+      `;
+      card.onclick = () => openPlayer(name, i);
+      container.appendChild(card);
+    });
+  }
+
+  function openPlayer(show, index) {
+    currentShow = show;
+    currentIndex = index;
+    playerModal.classList.add("active");
+    const src = show === "MurderDrones" ? murderDrones[index] : digitalCircus[index];
+    video.src = src;
+    video.play();
+  }
+
+  playPause.onclick = () => {
+    if (video.paused) { video.play(); playPause.textContent = "⏸"; }
+    else { video.pause(); playPause.textContent = "▶"; }
+  };
+
+  closeBtn.onclick = () => {
+    playerModal.classList.remove("active");
+    video.pause();
+    video.src = "";
+  };
+
+  video.addEventListener("timeupdate", () => {
+    const percent = (video.currentTime / video.duration) * 100;
+    progress.style.width = percent + "%";
+  });
+
+  progressBar.onclick = (e) => {
+    const rect = progressBar.getBoundingClientRect();
+    const pos = (e.clientX - rect.left) / rect.width;
+    video.currentTime = pos * video.duration;
+  };
+
+  nextEp.onclick = () => {
+    currentIndex++;
+    const arr = currentShow === "MurderDrones" ? murderDrones : digitalCircus;
+    if (currentIndex >= arr.length) currentIndex = 0;
+    video.src = arr[currentIndex];
+    video.play();
+  };
+
+  // populate cards
+  createCards(murderDrones, murderRow, "MurderDrones");
+  createCards(digitalCircus, circusRow, "DigitalCircus");
+</script>
+
+</body>
+</html>
